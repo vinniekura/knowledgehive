@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, RedirectToSignIn, useUser } from '@clerk/clerk-react'
 import Layout from './components/layout/Layout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import StudentsPage from './pages/StudentsPage.jsx'
@@ -27,4 +27,3 @@ export default function App() {
     </>
   )
 }
-      
