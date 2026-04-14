@@ -1,5 +1,5 @@
-// api/sessions/wrap.js
 import { Redis } from '@upstash/redis'
+import { getUserId } from '../_auth.js'
 
 function getRedis() {
   return new Redis({
@@ -12,19 +12,6 @@ function generateId(prefix = '') {
   const ts = Date.now().toString(36)
   const rand = Math.random().toString(36).slice(2, 8)
   return prefix ? `${prefix}_${ts}${rand}` : `${ts}${rand}`
-}
-
-async function getUserId(req) {
-  try {
-    const { createClerkClient } = await import('@clerk/backend')
-    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-    const token = req.headers.authorization?.replace('Bearer ', '')
-    if (!token) return null
-    const payload = await clerk.verifyToken(token)
-    return payload?.sub || null
-  } catch {
-    return null
-  }
 }
 
 export default async function handler(req, res) {
@@ -46,26 +33,26 @@ export default async function handler(req, res) {
   try {
     const session = await redis.get(`kh:session:${sessionId}`)
     if (!session) return res.status(404).json({ error: 'Session not found' })
-
     const student = await redis.get(`kh:student:${session.studentId}`)
     if (!student) return res.status(404).json({ error: 'Student not found' })
 
     const now = new Date().toISOString()
 
-    // Create Stripe payment link
+    // Stripe payment link
     let paymentUrl = null
-    if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.includes('placeholder')) {
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    if (stripeKey && !stripeKey.includes('placeholder') && stripeKey.startsWith('sk_')) {
       try {
         const stripeRes = await fetch('https://api.stripe.com/v1/payment_links', {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+            Authorization: `Bearer ${stripeKey}`,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: new URLSearchParams({
             'line_items[0][price_data][currency]': 'aud',
             'line_items[0][price_data][product_data][name]': `${student.subject} tutoring · ${student.sessionDurationMins} min`,
-            'line_items[0][price_data][unit_amount]': student.ratePerSession,
+            'line_items[0][price_data][unit_amount]': String(student.ratePerSession),
             'line_items[0][quantity]': '1',
             'metadata[session_id]': sessionId,
             'metadata[student_id]': session.studentId,
@@ -78,7 +65,6 @@ export default async function handler(req, res) {
       } catch (e) { console.error('Stripe error:', e) }
     }
 
-    // Update session
     const updatedSession = {
       ...session, status: 'completed',
       topicsCovered, needsMoreWork, homeworkSet,
@@ -87,7 +73,7 @@ export default async function handler(req, res) {
     }
     await redis.set(`kh:session:${sessionId}`, JSON.stringify(updatedSession))
 
-    // Create invoice
+    // Invoice
     const invoiceId = generateId('inv')
     const invoice = {
       id: invoiceId, createdAt: now, tutorId: userId,
@@ -101,40 +87,49 @@ export default async function handler(req, res) {
 
     // Update student stats
     await redis.set(`kh:student:${session.studentId}`, JSON.stringify({
-      ...student, totalSessions: (student.totalSessions || 0) + 1, lastSessionDate: now,
+      ...student,
+      totalSessions: (student.totalSessions || 0) + 1,
+      lastSessionDate: now,
     }))
 
-    // Send parent email
+    // Parent email
     let emailSent = false
-    if (sendEmailNow && student.sendSummaryToParent && process.env.RESEND_API_KEY && paymentUrl) {
+    const resendKey = process.env.RESEND_API_KEY
+    if (sendEmailNow && student.sendSummaryToParent && resendKey) {
       const amount = `$${(student.ratePerSession / 100).toFixed(2)}`
-      const listItems = arr => arr.map(i => `<li>${i}</li>`).join('')
+      const li = arr => arr.map(i => `<li>${i}</li>`).join('')
+      const payBlock = paymentUrl
+        ? `<div style="text-align:center;padding:20px;background:#ccfbf1;border-radius:8px;margin:20px 0">
+            <div style="font-size:28px;font-weight:bold;color:#115e59">${amount}</div>
+            <a href="${paymentUrl}" style="display:inline-block;margin-top:12px;background:#0d9488;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Pay Now via Stripe →</a>
+           </div>`
+        : `<p><strong>Session fee: ${amount}</strong> — your tutor will send a payment link shortly.</p>`
+
       try {
-        await fetch('https://api.resend.com/emails', {
+        const emailRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            Authorization: `Bearer ${resendKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             from: process.env.RESEND_FROM_EMAIL || 'noreply@knowledgehive.com.au',
-            to: [student.parentEmail, student.email].filter(Boolean),
+            to: [student.parentEmail, student.email].filter(e => e && e.includes('@')),
             subject: `${student.firstName}'s session summary · ${student.subject}`,
             html: `
-              <p>Hi ${student.parentName},</p>
-              ${topicsCovered.length ? `<p><strong>Covered:</strong><ul>${listItems(topicsCovered)}</ul></p>` : ''}
-              ${needsMoreWork.length ? `<p><strong>Focus next time:</strong><ul>${listItems(needsMoreWork)}</ul></p>` : ''}
-              ${homeworkSet.length ? `<p><strong>Homework:</strong><ul>${listItems(homeworkSet)}</ul></p>` : ''}
+              <p>Hi ${student.parentName || 'there'},</p>
+              <p>Great session with ${student.firstName} today!</p>
+              ${topicsCovered.length ? `<p><strong>Covered:</strong><ul>${li(topicsCovered)}</ul></p>` : ''}
+              ${needsMoreWork.length ? `<p><strong>Focus next time:</strong><ul>${li(needsMoreWork)}</ul></p>` : ''}
+              ${homeworkSet.length ? `<p><strong>Homework:</strong><ul>${li(homeworkSet)}</ul></p>` : ''}
               ${notesForParent ? `<p>${notesForParent}</p>` : ''}
-              <div style="text-align:center;padding:20px;background:#ccfbf1;border-radius:8px;margin:20px 0">
-                <div style="font-size:28px;font-weight:bold;color:#115e59">${amount}</div>
-                <a href="${paymentUrl}" style="display:inline-block;margin-top:12px;background:#0d9488;color:white;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Pay Now via Stripe →</a>
-              </div>
+              ${payBlock}
               <p>Warm regards,<br>KnowledgeHive</p>
             `,
           }),
         })
-        emailSent = true
+        if (emailRes.ok) emailSent = true
+        else console.error('Email send failed:', await emailRes.text())
       } catch (e) { console.error('Email error:', e) }
     }
 

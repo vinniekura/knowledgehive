@@ -1,5 +1,5 @@
-// api/sessions/index.js
 import { Redis } from '@upstash/redis'
+import { getUserId } from '../_auth.js'
 
 function getRedis() {
   return new Redis({
@@ -12,19 +12,6 @@ function generateId(prefix = '') {
   const ts = Date.now().toString(36)
   const rand = Math.random().toString(36).slice(2, 8)
   return prefix ? `${prefix}_${ts}${rand}` : `${ts}${rand}`
-}
-
-async function getUserId(req) {
-  try {
-    const { createClerkClient } = await import('@clerk/backend')
-    const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
-    const token = req.headers.authorization?.replace('Bearer ', '')
-    if (!token) return null
-    const payload = await clerk.verifyToken(token)
-    return payload?.sub || null
-  } catch {
-    return null
-  }
 }
 
 export default async function handler(req, res) {
@@ -49,18 +36,30 @@ export default async function handler(req, res) {
 
     const sessionId = generateId('ses')
     const session = {
-      id: sessionId, createdAt: new Date().toISOString(), tutorId: userId,
-      studentId, studentName: `${student.firstName} ${student.lastName}`,
-      scheduledDate, scheduledTime: scheduledTime || '15:00',
+      id: sessionId,
+      createdAt: new Date().toISOString(),
+      tutorId: userId,
+      studentId,
+      studentName: `${student.firstName} ${student.lastName}`,
+      scheduledDate,
+      scheduledTime: scheduledTime || '15:00',
       durationMins: durationMins || student.sessionDurationMins || 90,
       subject: subject || student.subject,
-      sessionType: student.sessionType, status: 'scheduled',
-      topicsCovered: [], needsMoreWork: [], homeworkSet: [],
-      notesForParent: '', privateTutorNotes: '',
-      rateAud: student.ratePerSession, paymentStatus: 'pending',
+      sessionType: student.sessionType,
+      status: 'scheduled',
+      topicsCovered: [],
+      needsMoreWork: [],
+      homeworkSet: [],
+      notesForParent: '',
+      privateTutorNotes: '',
+      rateAud: student.ratePerSession,
+      paymentStatus: 'pending',
     }
     await redis.set(`kh:session:${sessionId}`, JSON.stringify(session))
-    await redis.zadd(`kh:${userId}:sessions`, { score: new Date(scheduledDate).getTime(), member: sessionId })
+    await redis.zadd(`kh:${userId}:sessions`, {
+      score: new Date(scheduledDate).getTime(),
+      member: sessionId,
+    })
     return res.status(201).json({ session })
   }
 
