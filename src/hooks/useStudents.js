@@ -43,11 +43,19 @@ export function useStudents() {
 
   const deleteStudent = useCallback(async (studentId) => {
     const token = await getToken()
-    const res = await fetch(`/api/students/${studentId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+    // Use flat POST route to avoid Vercel dynamic routing issues
+    const res = await fetch('/api/delete-student', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: studentId }),
     })
-    if (!res.ok) throw new Error('Failed to delete student')
+    const text = await res.text()
+    let data
+    try { data = JSON.parse(text) } catch { throw new Error(text) }
+    if (!res.ok) throw new Error(data.error || 'Failed to delete student')
     setStudents(prev => prev.filter(s => s.id !== studentId))
   }, [getToken])
 
