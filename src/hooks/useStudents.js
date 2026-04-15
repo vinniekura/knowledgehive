@@ -14,7 +14,8 @@ export function useStudents() {
       const res = await fetch('/api/students', {
         headers: { Authorization: `Bearer ${token}` }
       })
-      const data = await res.json()
+      const text = await res.text()
+      const data = JSON.parse(text)
       setStudents(data.students || [])
     } catch (err) {
       setError(err.message)
@@ -29,17 +30,26 @@ export function useStudents() {
     const token = await getToken()
     const res = await fetch('/api/students', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     })
-    const data = await res.json()
+    const text = await res.text()
+    let data
+    try { data = JSON.parse(text) } catch { throw new Error(text) }
     if (!res.ok) throw new Error(data.error || 'Failed to add student')
     setStudents(prev => [data.student, ...prev])
     return data.student
   }, [getToken])
 
-  return { students, loading, error, refetch: fetchStudents, addStudent }
+  const deleteStudent = useCallback(async (studentId) => {
+    const token = await getToken()
+    const res = await fetch(`/api/students/${studentId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('Failed to delete student')
+    setStudents(prev => prev.filter(s => s.id !== studentId))
+  }, [getToken])
+
+  return { students, loading, error, refetch: fetchStudents, addStudent, deleteStudent }
 }
