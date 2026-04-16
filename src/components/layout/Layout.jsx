@@ -20,7 +20,7 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     getToken().then(token =>
-      fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } })
+      fetch('/api/admin?action=stats', { headers: { Authorization: `Bearer ${token}` } })
         .then(r => { if (r.ok) setIsAdmin(true) })
         .catch(() => {})
     )

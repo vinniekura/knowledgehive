@@ -14,7 +14,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     getToken().then(token =>
-      fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } })
+      fetch('/api/admin?action=stats', { headers: { Authorization: `Bearer ${token}` } })
         .then(r => r.json())
         .then(d => { setStats(d); setLoading(false) })
         .catch(() => setLoading(false))
@@ -137,7 +137,7 @@ function TutorFeeEditor({ tutor, getToken, onSaved }) {
   async function save() {
     setSaving(true)
     const token = await getToken()
-    await fetch('/api/admin/tutor-settings', {
+    await fetch('/api/admin?action=tutor-settings', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ tutorId: tutor.id, feePercent: parseFloat(fee) }),
@@ -174,7 +174,7 @@ function PlatformSettings({ getToken, onSaved }) {
   async function save() {
     setSaving(true)
     const token = await getToken()
-    await fetch('/api/admin/platform-settings', {
+    await fetch('/api/admin?action=platform-settings', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ onboardingFeePercent: parseFloat(fee) }),
@@ -219,7 +219,7 @@ function AddTutorModal({ getToken, onClose, onSaved }) {
   async function save() {
     setSaving(true)
     const token = await getToken()
-    const res = await fetch('/api/admin/tutors', {
+    const res = await fetch('/api/admin?action=tutors', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, subjects: form.subjects.split(',').map(s => s.trim()).filter(Boolean) }),
