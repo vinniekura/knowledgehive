@@ -1,8 +1,11 @@
+// api/invoices.js
+// GET /api/invoices — list all invoices for the authenticated tutor
 import { Redis } from '@upstash/redis'
 import { getUserId } from './_auth.js'
 
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json')
+
   const userId = await getUserId(req)
   if (!userId) return res.status(401).json({ error: 'Unauthorised' })
 
@@ -10,9 +13,14 @@ export default async function handler(req, res) {
     url: process.env.UPSTASH_REDIS_REST_URL,
     token: process.env.UPSTASH_REDIS_REST_TOKEN,
   })
-  const ids = await redis.zrange(`kh:${userId}:invoices`, 0, -1, { rev: true })
-  const invoices = ids.length
-    ? await Promise.all(ids.map(id => redis.get(`kh:invoice:${id}`)))
-    : []
-  return res.status(200).json({ invoices: invoices.filter(Boolean) })
+
+  if (req.method === 'GET') {
+    const ids = await redis.zrange(`kh:${userId}:invoices`, 0, -1, { rev: true })
+    const invoices = ids.length
+      ? await Promise.all(ids.map(id => redis.get(`kh:invoice:${id}`)))
+      : []
+    return res.status(200).json({ invoices: invoices.filter(Boolean) })
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' })
 }
