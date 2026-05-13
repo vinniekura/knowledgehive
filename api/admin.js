@@ -30,34 +30,31 @@ export default async function handler(req, res) {
   const rl = await getRole(redis, uid)
   if (!rl) return res.status(403).json({ error: 'Admin only' })
 
-  // ADD-ADMIN — now accepts directUserId to bypass email lookup
   if (action === 'add-admin' && req.method === 'POST') {
     if (rl !== 'super') return res.status(403).json({ error: 'Super admin required' })
     const { email, newRole = 'ops', directUserId } = req.body
-
-    // If directUserId provided, use it directly — bypasses email lookup
     if (directUserId) {
       await redis.sadd('kh:admins', directUserId)
-      await redis.set(`kh:admin:${directUserId}`, JSON.stringify({
-        userId: directUserId, role: newRole, addedBy: uid, addedAt: new Date().toISOString()
-      }))
+      await redis.set(`kh:admin:${directUserId}`, JSON.stringify({ userId: directUserId, role: newRole, addedBy: uid, addedAt: new Date().toISOString() }))
       return res.json({ success: true, pending: false, targetUserId: directUserId, role: newRole })
     }
-
     if (!email) return res.status(400).json({ error: 'Email or directUserId required' })
-    
-    // Email lookup — but only accept Clerk user IDs (start with 'user_')
     const targetUid = await redis.get(`kh:email:${email}`)
     const resolvedUid = (targetUid && targetUid.startsWith('user_')) ? targetUid : null
-
     if (!resolvedUid) {
-      // Store as pending — will be granted when they sign in
       await redis.set(`kh:pending-admin:${email}`, JSON.stringify({ email, role: newRole, addedBy: uid, addedAt: new Date().toISOString() }))
       return res.json({ success: true, pending: true, message: `${email} will get ${newRole} access on next sign-in` })
     }
     await redis.sadd('kh:admins', resolvedUid)
     await redis.set(`kh:admin:${resolvedUid}`, JSON.stringify({ userId: resolvedUid, role: newRole, addedBy: uid, addedAt: new Date().toISOString() }))
     return res.json({ success: true, pending: false, targetUserId: resolvedUid, role: newRole })
+  }
+
+  if (action === 'list-admins' && req.method === 'GET') {
+    if (rl !== 'super') return res.status(403).json({ error: 'Super admin required' })
+    const ids = await redis.smembers('kh:admins')
+    const admins = ids.length ? await Promise.all(ids.map(id => redis.get(`kh:admin:${id}`))) : []
+    return res.json({ admins: admins.filter(Boolean) })
   }
 
   if (action === 'stats' && req.method === 'GET') {
@@ -85,13 +82,28 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const { firstName, lastName, email, businessName, subjects, feePercent } = req.body
       const tid = gid('tut')
-      const tutor = { id:tid, createdAt:new Date().toISOString(), firstName, lastName, email, businessName:businessName||`${firstName} ${lastName} Tutoring`, abn:'', subjects:subjects||[], feePercent:feePercent??0, status:'active', paymentMethod:'platform', totalStudents:0, totalSessions:0 }
+      const tutor = { id:tid, createdAt:new Date().toISOString(), firstName, lastName, email, businessName:businessName||`${firstName} ${lastName} Tutoring`, abn:'', subjects:subjects||[], feePercent:feePercent??0, status:'active', paymentMethod:'platform', totalStudents:0, totalSessions:0,
+        // Payment settings — all blank until Super Admin sets them
+        paymentConfig: { method: 'platform', stripePaymentLink: '', payId: '', bsb: '', accountNumber: '', accountName: '', allowTutorEdit: false }
+      }
       await redis.set(`kh:tutor:${tid}`, JSON.stringify(tutor))
       await redis.zadd('kh:tutors',{score:Date.now(),member:tid})
       await redis.set(`kh:email:${email}`, tid)
       if (process.env.RESEND_API_KEY) fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.RESEND_FROM_EMAIL||'noreply@datamastery.com.au',to:email,subject:'Welcome to TutorMastery',html:`<p>Hi ${firstName}, your account is ready. <a href="${process.env.VITE_APP_URL||'https://tutormastery.datamastery.com.au'}">Sign in here →</a></p>`})}).catch(e=>console.error(e))
       return res.status(201).json({ tutor })
     }
+  }
+
+  // TUTOR-PAYMENT-SETTINGS — Super Admin sets payment config per tutor
+  if (action === 'tutor-payment' && req.method === 'POST') {
+    if (rl !== 'super') return res.status(403).json({ error: 'Super admin required' })
+    const { tutorId, paymentConfig } = req.body
+    if (!tutorId) return res.status(400).json({ error: 'tutorId required' })
+    const tutor = await redis.get(`kh:tutor:${tutorId}`)
+    if (!tutor) return res.status(404).json({ error: 'Tutor not found' })
+    const updated = { ...tutor, paymentConfig: { ...tutor.paymentConfig, ...paymentConfig } }
+    await redis.set(`kh:tutor:${tutorId}`, JSON.stringify(updated))
+    return res.json({ tutor: updated })
   }
 
   if (action === 'tutor-settings' && req.method === 'POST') {
@@ -121,13 +133,6 @@ export default async function handler(req, res) {
       await redis.set('kh:platform:bank', JSON.stringify(bd))
       return res.json({ success:true, bank:bd })
     }
-  }
-
-  if (action === 'list-admins' && req.method === 'GET') {
-    if (rl !== 'super') return res.status(403).json({ error: 'Super admin required' })
-    const ids = await redis.smembers('kh:admins')
-    const admins = ids.length ? await Promise.all(ids.map(id=>redis.get(`kh:admin:${id}`))) : []
-    return res.json({ admins: admins.filter(Boolean) })
   }
 
   return res.status(400).json({ error: 'Unknown action' })
