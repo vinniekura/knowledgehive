@@ -3,14 +3,15 @@ import { useForm } from 'react-hook-form'
 import { X, ChevronRight, ChevronLeft, Check } from 'lucide-react'
 
 const STEPS = ['Profile', 'Enrolment', 'Payment']
-
-const SUBJECTS = ['Specialist Mathematics','Physics','Chemistry','Literature / English','Biology','Economics','Other']
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-const TIMES = ['3:00 PM','3:30 PM','4:00 PM','4:30 PM','5:00 PM','9:00 AM','10:00 AM']
+const SUBJECTS = ['Specialist Mathematics','Physics','Chemistry','Literature / English','Biology','Economics','Mathematics','Computing','Other']
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+const TIMES = ['7:00 AM','8:00 AM','9:00 AM','10:00 AM','3:00 PM','3:30 PM','4:00 PM','4:30 PM','5:00 PM','5:30 PM','6:00 PM','7:00 PM']
 
 export default function AddStudentWizard({ onClose, onSave }) {
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [selectedDays, setSelectedDays] = useState([])
+
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     defaultValues: {
       source: 'direct',
@@ -26,11 +27,17 @@ export default function AddStudentWizard({ onClose, onSave }) {
 
   const source = watch('source')
 
+  function toggleDay(day) {
+    setSelectedDays(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    )
+  }
+
   const onSubmit = async (data) => {
     if (step < 2) { setStep(s => s + 1); return }
     setSaving(true)
     try {
-      await onSave(data)
+      await onSave({ ...data, preferredDays: selectedDays })
       onClose()
     } catch (err) {
       alert(err.message)
@@ -39,21 +46,21 @@ export default function AddStudentWizard({ onClose, onSave }) {
     }
   }
 
+  const inp = () => 'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition-colors'
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between p-6 pb-4">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Add Student</h2>
             <p className="text-xs text-slate-400 mt-0.5">Step {step + 1} of 3 — {STEPS[step]}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
-            <X size={20} />
-          </button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors"><X size={20} /></button>
         </div>
 
-        {/* Step indicators */}
+        {/* Steps */}
         <div className="flex items-center px-6 mb-5 gap-2">
           {STEPS.map((s, i) => (
             <div key={s} className="flex items-center gap-2 flex-1">
@@ -70,31 +77,31 @@ export default function AddStudentWizard({ onClose, onSave }) {
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="px-6 pb-6">
 
-            {/* ── STEP 1: Profile ── */}
+            {/* STEP 1 — Profile */}
             {step === 0 && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="First Name" error={errors.firstName}>
-                    <input {...register('firstName', { required: true })} className={input()} placeholder="James" />
+                    <input {...register('firstName', { required: true })} className={inp()} placeholder="James" />
                   </Field>
                   <Field label="Last Name" error={errors.lastName}>
-                    <input {...register('lastName', { required: true })} className={input()} placeholder="Kovacs" />
+                    <input {...register('lastName', { required: true })} className={inp()} placeholder="Kovacs" />
                   </Field>
                 </div>
                 <Field label="Student Email">
-                  <input {...register('email')} type="email" className={input()} placeholder="james@email.com" />
+                  <input {...register('email')} type="email" className={inp()} placeholder="james@email.com" />
                 </Field>
                 <Field label="Parent / Guardian Name" error={errors.parentName}>
-                  <input {...register('parentName', { required: true })} className={input()} placeholder="Margaret Kovacs" />
+                  <input {...register('parentName', { required: true })} className={inp()} placeholder="Margaret Kovacs" />
                 </Field>
                 <Field label="Parent Email — payment links sent here" error={errors.parentEmail}>
-                  <input {...register('parentEmail', { required: true })} type="email" className={input()} placeholder="margaret@email.com" />
+                  <input {...register('parentEmail', { required: true })} type="email" className={inp()} placeholder="margaret@email.com" />
                 </Field>
-                <Field label="Parent Mobile (SMS reminders)">
-                  <input {...register('parentMobile')} type="tel" className={input()} placeholder="+61 4xx xxx xxx" />
+                <Field label="Parent Mobile">
+                  <input {...register('parentMobile')} type="tel" className={inp()} placeholder="+61 4xx xxx xxx" />
                 </Field>
                 <Field label="How did they find you?">
-                  <select {...register('source')} className={input()}>
+                  <select {...register('source')} className={inp()}>
                     <option value="direct">Direct — parent / student self-referred</option>
                     <option value="corporate">Corporate client enrolment</option>
                     <option value="school">School referral</option>
@@ -105,66 +112,85 @@ export default function AddStudentWizard({ onClose, onSave }) {
                 {source === 'corporate' && (
                   <>
                     <Field label="Company / Organisation">
-                      <input {...register('companyName')} className={input()} placeholder="e.g. Deloitte, KPMG" />
+                      <input {...register('companyName')} className={inp()} placeholder="e.g. Deloitte, KPMG" />
                     </Field>
                     <Field label="HR / L&D Contact Email">
-                      <input {...register('hrContactEmail')} type="email" className={input()} placeholder="hr@company.com.au" />
+                      <input {...register('hrContactEmail')} type="email" className={inp()} placeholder="hr@company.com.au" />
                     </Field>
                   </>
                 )}
               </div>
             )}
 
-            {/* ── STEP 2: Enrolment ── */}
+            {/* STEP 2 — Enrolment */}
             {step === 1 && (
               <div className="space-y-3">
                 <Field label="Subject / Course">
-                  <select {...register('subject')} className={input()}>
+                  <select {...register('subject')} className={inp()}>
                     {SUBJECTS.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Year / Level">
-                    <select {...register('yearLevel')} className={input()}>
-                      {['Year 12','Year 11','Year 10','Tertiary','Professional'].map(y => <option key={y}>{y}</option>)}
+                    <select {...register('yearLevel')} className={inp()}>
+                      {['Year 12','Year 11','Year 10','Year 9','Tertiary','Professional'].map(y => <option key={y}>{y}</option>)}
                     </select>
                   </Field>
                   <Field label="Session Type">
-                    <select {...register('sessionType')} className={input()}>
+                    <select {...register('sessionType')} className={inp()}>
                       <option value="1on1_online">1:1 Online</option>
                       <option value="1on1_inperson">1:1 In-person</option>
                       <option value="group">Group</option>
                     </select>
                   </Field>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Preferred Day">
-                    <select {...register('preferredDay')} className={input()}>
-                      {DAYS.map(d => <option key={d}>{d}</option>)}
-                    </select>
-                  </Field>
-                  <Field label="Preferred Time">
-                    <select {...register('preferredTime')} className={input()}>
-                      {TIMES.map(t => <option key={t}>{t}</option>)}
-                    </select>
-                  </Field>
+
+                {/* PREFERRED DAYS — multi-select chips */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Preferred Days <span className="font-normal text-slate-400">(select all that apply)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {DAYS.map(day => (
+                      <button key={day} type="button" onClick={() => toggleDay(day)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all
+                          ${selectedDays.includes(day)
+                            ? 'bg-teal-100 text-teal-800 border-teal-300'
+                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                        {day.slice(0, 3)}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedDays.length > 0 && (
+                    <p className="text-xs text-teal-600 mt-1.5 font-medium">
+                      Selected: {selectedDays.join(', ')}
+                    </p>
+                  )}
                 </div>
+
+                <Field label="Preferred Start Time">
+                  <select {...register('preferredTime')} className={inp()}>
+                    {TIMES.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </Field>
+
                 <Field label="Learning Goals (shown in every session summary)">
-                  <textarea {...register('learningGoals')} className={`${input()} min-h-20 resize-none`}
+                  <textarea {...register('learningGoals')} className={`${inp()} min-h-20 resize-none`}
                     placeholder="e.g. Improve exam technique for complex number proofs. Target 90+ in the final." />
                 </Field>
               </div>
             )}
 
-            {/* ── STEP 3: Payment ── */}
+            {/* STEP 3 — Payment */}
             {step === 2 && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Rate per Session ($AUD)">
-                    <input {...register('ratePerSession')} type="number" min="0" step="5" className={input()} />
+                    <input {...register('ratePerSession')} type="number" min="0" step="5" className={inp()} />
                   </Field>
                   <Field label="Session Length">
-                    <select {...register('sessionDurationMins')} className={input()}>
+                    <select {...register('sessionDurationMins')} className={inp()}>
+                      <option value={45}>45 min</option>
                       <option value={60}>60 min</option>
                       <option value={90}>90 min</option>
                       <option value={120}>120 min</option>
@@ -172,14 +198,14 @@ export default function AddStudentWizard({ onClose, onSave }) {
                   </Field>
                 </div>
                 <Field label="Invoice / Bill To">
-                  <select {...register('billTo')} className={input()}>
+                  <select {...register('billTo')} className={inp()}>
                     <option value="parent">Parent / Guardian</option>
                     <option value="student">Student (self-paying)</option>
                     <option value="corporate">Corporate — monthly invoice</option>
                   </select>
                 </Field>
                 <Field label="Payment Method">
-                  <select {...register('paymentMethod')} className={input()}>
+                  <select {...register('paymentMethod')} className={inp()}>
                     <option value="stripe">Stripe — card payment link</option>
                     <option value="payid">PayID / Bank Transfer</option>
                     <option value="cash">Cash</option>
@@ -206,7 +232,9 @@ export default function AddStudentWizard({ onClose, onSave }) {
               <button type="submit" disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
                 style={{ background: step < 2 ? 'var(--honey)' : 'var(--teal)', color: step < 2 ? 'var(--navy)' : '#fff' }}>
-                {saving ? 'Saving…' : step < 2 ? <>Next: {STEPS[step + 1]} <ChevronRight size={15} /></> : '✓ Save & Send Welcome Email'}
+                {saving ? 'Saving…' : step < 2
+                  ? <><span>Next: {STEPS[step + 1]}</span><ChevronRight size={15} /></>
+                  : '✓ Save & Send Welcome Email'}
               </button>
             </div>
           </div>
@@ -234,5 +262,3 @@ function CheckRow({ register, name, label }) {
     </label>
   )
 }
-
-const input = () => 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition-colors'

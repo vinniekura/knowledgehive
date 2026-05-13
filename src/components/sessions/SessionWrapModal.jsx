@@ -1,19 +1,19 @@
 import { useState } from 'react'
-import { X, Send } from 'lucide-react'
+import { X, Send, ChevronDown, ChevronUp } from 'lucide-react'
 import { formatMoney } from '../../lib/utils.js'
 
-const TOPICS = ['Complex number proofs','Argand diagrams','De Moivre\'s theorem','Integration review','Vectors','Proof by induction','Differential equations','Mechanics','Waves & optics','Essay structure','Close reading','Critical analysis']
-const WORK_ON = ['Integration by substitution','Proof structure','Exam timing','Working clearly','Show all steps','Interpretation','Time management']
-const HOMEWORK = ['Practice paper Q1–Q8','Textbook exercises','Review notes','Past exam paper','Rewrite draft','Khan Academy videos']
+const TOPICS = ['Complex number proofs','Argand diagrams','De Moivre\'s theorem','Integration review','Vectors','Proof by induction','Differential equations','Mechanics','Waves & optics','Essay structure','Close reading','Critical analysis','Algebra','Trigonometry','Statistics','Calculus']
+const WORK_ON = ['Integration by substitution','Proof structure','Exam timing','Working clearly','Show all steps','Interpretation','Time management','Algebra skills','Word problems']
+const HOMEWORK = ['Practice paper Q1–Q8','Textbook exercises','Review notes','Past exam paper','Rewrite draft','Khan Academy videos','Worksheet set','Finish problem set']
 
 export default function SessionWrapModal({ session, student, onClose, onWrap }) {
   const [covered, setCovered] = useState([])
   const [needsWork, setNeedsWork] = useState([])
   const [homework, setHomework] = useState([])
   const [notesForParent, setNotesForParent] = useState('')
-  const [privateTutorNotes, setPrivateTutorNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
 
   function toggle(arr, setArr, val) {
     setArr(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
@@ -22,15 +22,7 @@ export default function SessionWrapModal({ session, student, onClose, onWrap }) 
   async function handleSend() {
     setSaving(true)
     try {
-      await onWrap({
-        sessionId: session.id,
-        topicsCovered: covered,
-        needsMoreWork: needsWork,
-        homeworkSet: homework,
-        notesForParent,
-        privateTutorNotes,
-        sendEmailNow: true,
-      })
+      await onWrap({ sessionId: session.id, topicsCovered: covered, needsMoreWork: needsWork, homeworkSet: homework, notesForParent, privateTutorNotes: '', sendEmailNow: true })
       setDone(true)
       setTimeout(onClose, 2000)
     } catch (err) {
@@ -41,96 +33,87 @@ export default function SessionWrapModal({ session, student, onClose, onWrap }) 
   }
 
   const amount = formatMoney(student?.ratePerSession || 11000)
-  const parentEmail = student?.parentEmail || 'parent'
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto shadow-2xl">
+    <div className="fixed inset-0 bg-slate-900/60 flex items-end sm:items-center justify-center z-50">
+      {/* Bottom sheet on mobile, centered modal on desktop */}
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl max-h-[95vh] overflow-y-auto shadow-2xl">
+
+        {/* Handle bar — mobile only */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full bg-slate-200" />
+        </div>
 
         {/* Header */}
-        <div className="flex items-start justify-between p-6 pb-3">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">Wrap Session</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {student?.firstName} {student?.lastName} · {session?.subject} · {session?.scheduledDate}
-            </p>
+            <h2 className="text-lg font-semibold text-slate-900">Wrap Session</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{student?.firstName} {student?.lastName} · {session?.subject}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+          <button onClick={onClose} className="text-slate-400 p-1"><X size={20} /></button>
         </div>
 
         {done ? (
-          <div className="p-8 text-center">
-            <div className="w-14 h-14 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-3">
+          <div className="p-10 text-center">
+            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-3">
               <Send size={24} className="text-teal-600" />
             </div>
             <p className="font-semibold text-slate-800">Summary sent!</p>
-            <p className="text-sm text-slate-500 mt-1">Payment link emailed to {parentEmail}</p>
+            <p className="text-sm text-slate-500 mt-1">Payment link emailed to {student?.parentEmail}</p>
           </div>
         ) : (
-          <div className="px-6 pb-6 space-y-4">
+          <div className="px-5 pb-6 space-y-5">
+
             {/* Topics covered */}
-            <ChipGroup label="Topics Covered" chips={TOPICS} selected={covered}
-              onToggle={val => toggle(covered, setCovered, val)} color="teal" prefix="✓ " />
+            <ChipGroup label="✓ Topics Covered" chips={TOPICS} selected={covered}
+              onToggle={val => toggle(covered, setCovered, val)} color="teal" />
 
             {/* Needs work */}
-            <ChipGroup label="Needs More Work" chips={WORK_ON} selected={needsWork}
-              onToggle={val => toggle(needsWork, setNeedsWork, val)} color="amber" prefix="⚠ " />
+            <ChipGroup label="⚠ Needs More Work" chips={WORK_ON} selected={needsWork}
+              onToggle={val => toggle(needsWork, setNeedsWork, val)} color="amber" />
 
             {/* Homework */}
-            <ChipGroup label="Homework Set" chips={HOMEWORK} selected={homework}
-              onToggle={val => toggle(homework, setHomework, val)} color="navy" />
+            <ChipGroup label="📚 Homework Set" chips={HOMEWORK} selected={homework}
+              onToggle={val => toggle(homework, setHomework, val)} color="blue" />
 
-            {/* Notes for parent */}
+            {/* Notes */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                Extra notes for parent (optional)
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Extra notes for parent
               </label>
               <textarea value={notesForParent} onChange={e => setNotesForParent(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition-colors min-h-16 resize-none"
-                placeholder="Any extra context to include in the email…" />
+                className="w-full border border-slate-200 rounded-xl px-3 py-3 text-sm bg-slate-50 focus:outline-none focus:border-teal-400 focus:bg-white transition-colors min-h-20 resize-none"
+                placeholder="Any extra context to add…" />
             </div>
 
-            {/* Private notes */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                Private tutor notes — not sent
-              </label>
-              <textarea value={privateTutorNotes} onChange={e => setPrivateTutorNotes(e.target.value)}
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-amber-50 focus:outline-none focus:border-amber-400 focus:bg-white transition-colors min-h-12 resize-none"
-                placeholder="Internal only…" />
-            </div>
-
-            {/* Email preview */}
+            {/* Email preview — collapsible */}
             <div className="rounded-xl overflow-hidden border border-slate-200">
-              <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 space-y-1">
-                <div className="flex gap-2 text-xs"><span className="text-slate-400 w-10 font-semibold">To</span><span className="text-slate-600">{parentEmail}</span></div>
-                <div className="flex gap-2 text-xs"><span className="text-slate-400 w-10 font-semibold">CC</span><span className="text-slate-600">{student?.email}</span></div>
-                <div className="flex gap-2 text-xs"><span className="text-slate-400 w-10 font-semibold">Re</span><span className="text-slate-600">{student?.firstName}'s session — {session?.subject}</span></div>
-              </div>
-              <div className="p-4 text-xs text-slate-600 space-y-2 leading-relaxed">
-                <p>Hi {student?.parentName},</p>
-                <p>Great session today!</p>
-                {covered.length > 0 && <p><strong>Covered:</strong> {covered.join(', ')}.</p>}
-                {needsWork.length > 0 && <p><strong>Focus next time:</strong> {needsWork.join(', ')}.</p>}
-                {homework.length > 0 && <p><strong>Homework:</strong> {homework.join(', ')}.</p>}
-                {notesForParent && <p>{notesForParent}</p>}
-                {/* Payment block */}
-                <div className="bg-teal-50 border border-teal-200 rounded-lg p-3 text-center my-2">
-                  <div className="text-xl font-bold text-teal-800">{amount}</div>
-                  <div className="text-teal-700 text-xs mt-0.5">Session fee · {session?.subject} · {session?.durationMins || student?.sessionDurationMins} min</div>
-                  <div className="inline-block mt-2 bg-teal-600 text-white px-4 py-1.5 rounded-lg text-xs font-semibold">
-                    Pay Now via Stripe →
+              <button onClick={() => setShowPreview(!showPreview)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 text-sm font-semibold text-slate-700">
+                Preview parent email
+                {showPreview ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              {showPreview && (
+                <div className="p-4 text-xs text-slate-600 leading-relaxed space-y-2">
+                  <p>Hi {student?.parentName || 'there'},</p>
+                  {covered.length > 0 && <p><strong>Covered:</strong> {covered.join(', ')}.</p>}
+                  {needsWork.length > 0 && <p><strong>Focus next time:</strong> {needsWork.join(', ')}.</p>}
+                  {homework.length > 0 && <p><strong>Homework:</strong> {homework.join(', ')}.</p>}
+                  {notesForParent && <p>{notesForParent}</p>}
+                  <div className="bg-teal-50 rounded-lg p-3 text-center border border-teal-200 mt-2">
+                    <div className="text-lg font-bold text-teal-800">{amount}</div>
+                    <div className="inline-block mt-1.5 bg-teal-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold">Pay Now via Stripe →</div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Actions */}
+            {/* Send button — large tap target */}
             <button onClick={handleSend} disabled={saving}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
-              style={{ background: 'var(--teal)' }}>
-              <Send size={15} />
-              {saving ? 'Sending…' : `Send Summary + ${amount} Payment Link to Parent`}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-base font-bold text-white transition-all disabled:opacity-50 active:scale-98"
+              style={{ background: 'var(--teal)', minHeight: '56px' }}>
+              <Send size={18} />
+              {saving ? 'Sending…' : `Send Summary + ${amount} Payment Link`}
             </button>
           </div>
         )}
@@ -139,22 +122,23 @@ export default function SessionWrapModal({ session, student, onClose, onWrap }) 
   )
 }
 
-function ChipGroup({ label, chips, selected, onToggle, color, prefix = '' }) {
+function ChipGroup({ label, chips, selected, onToggle, color }) {
   const colors = {
     teal:  { on: 'bg-teal-100 text-teal-800 border-teal-300',  off: 'bg-slate-50 text-slate-500 border-slate-200' },
     amber: { on: 'bg-amber-100 text-amber-800 border-amber-300', off: 'bg-slate-50 text-slate-500 border-slate-200' },
-    navy:  { on: 'bg-blue-100 text-blue-800 border-blue-300',  off: 'bg-slate-50 text-slate-500 border-slate-200' },
+    blue:  { on: 'bg-blue-100 text-blue-800 border-blue-300',  off: 'bg-slate-50 text-slate-500 border-slate-200' },
   }[color]
 
   return (
-    <div>
-      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">{label}</label>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="pt-2">
+      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{label}</label>
+      <div className="flex flex-wrap gap-2">
         {chips.map(chip => (
           <button key={chip} type="button" onClick={() => onToggle(chip)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-all
-              ${selected.includes(chip) ? colors.on : colors.off}`}>
-            {selected.includes(chip) ? prefix : ''}{chip}
+            className={`text-xs font-semibold px-3 py-2 rounded-xl border transition-all active:scale-95
+              ${selected.includes(chip) ? colors.on : colors.off}`}
+            style={{ minHeight: '36px' }}>
+            {chip}
           </button>
         ))}
       </div>
